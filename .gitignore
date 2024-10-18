@@ -1,7 +1,8 @@
-# ignore dataset, vscode, test
+# ignore dataset, vscode, test, output
 dataset/
 .vscode/
 test/
+output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
