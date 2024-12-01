@@ -113,9 +113,7 @@ else:
 # ## Preprocessing for 1D CNN
 
 # %%
-train_solution = np.loadtxt(
-    f"{auxiliary_folder}/train_labels.csv", delimiter=",", skiprows=1
-)
+train_solution = np.loadtxt(f"{auxiliary_folder}/train_labels.csv", delimiter=",", skiprows=1)
 
 # targets:
 # exclude the first column from the train_solution, because that column represents the baseline or overall flux
@@ -167,9 +165,7 @@ signal_AIRS_diff_transposed_binned, signal_FGS_diff_transposed_binned = (
 FGS_column = signal_FGS_diff_transposed_binned.sum(axis=2)
 # FGS_column.shape: (673, 187, 32)
 
-dataset = np.concatenate(
-    [signal_AIRS_diff_transposed_binned, FGS_column[:, :, np.newaxis, :]], axis=2
-)
+dataset = np.concatenate([signal_AIRS_diff_transposed_binned, FGS_column[:, :, np.newaxis, :]], axis=2)
 # dataset.shape: (673, 187, 283, 32)
 
 # plot
@@ -224,6 +220,7 @@ plt.show()
 # %% [markdown]
 # We divide the images by the star flux assuming the first and last 50 instants belong to the out of transit.
 
+
 # %%
 # TODO: this function is not used
 def create_dataset_norm(dataset1, dataset2):
@@ -254,6 +251,7 @@ dataset_norm = np.transpose(dataset_norm, (0, 2, 1))
 # ## Split the targets and observations between valid and train
 #
 # We start by computing a "white curve", that is actually the sum of the signal over the all image, as a function of time. We split the data and normalize the train/valid/test data.
+
 
 # %%
 def split(data, N):
@@ -286,9 +284,7 @@ wc_mean = signal_AIRS_diff_transposed_binned_sum3.mean(axis=1).mean(axis=1)
 # wc_mean.shape: (673,) - mean of the white curve for each observation
 
 # normalize the white curve
-white_curve = (
-    signal_AIRS_diff_transposed_binned_sum3.sum(axis=2) / wc_mean[:, np.newaxis]
-)
+white_curve = signal_AIRS_diff_transposed_binned_sum3.sum(axis=2) / wc_mean[:, np.newaxis]
 
 del signal_AIRS_diff_transposed_binned_sum3, signal_AIRS_diff_transposed_binned
 
@@ -323,8 +319,8 @@ train_targets_wc, valid_targets_wc = (
 train_wc, valid_wc = normalise_wlc(train_wc, valid_wc)
 
 # Normalize the targets
-train_targets_wc_norm, valid_targets_wc_norm, min_train_valid_wc, max_train_valid_wc = (
-    normalize(train_targets_wc, valid_targets_wc)
+train_targets_wc_norm, valid_targets_wc_norm, min_train_valid_wc, max_train_valid_wc = normalize(
+    train_targets_wc, valid_targets_wc
 )
 
 print("train_wc.shape", train_wc.shape)
@@ -379,6 +375,7 @@ plt.show()
 # - Reduces dimensionality from detailed spectral features to a single summary metric.
 # - Provides a normalized measure of light intensity across time for further analyses or comparisons.
 # - Can be used as a preliminary step in a more complex analysis pipeline, where the mean flux serves as an input feature or control variable.
+
 
 # %%
 class CNNModel(nn.Module):
@@ -438,9 +435,7 @@ def save_checkpoint(model, valid_loss, best_valid_loss, epoch, optimizer, output
 
     if valid_loss < best_valid_loss:
 
-        print(
-            f"Validation loss decreased from {best_valid_loss:.6f} to {valid_loss:.6f}."
-        )
+        print(f"Validation loss decreased from {best_valid_loss:.6f} to {valid_loss:.6f}.")
 
         best_valid_loss = valid_loss
         torch.save(
@@ -546,21 +541,15 @@ def train(
                 valid_output = model(x_valid)
                 valid_loss += criterion(valid_output, y_valid).item()
 
-                valid_progress.set_description(
-                    f"Validation Epoch {epoch+1}/{num_epochs}"
-                )
-                valid_progress.set_postfix(
-                    {"valid_loss": valid_loss / len(valid_loader)}
-                )
+                valid_progress.set_description(f"Validation Epoch {epoch+1}/{num_epochs}")
+                valid_progress.set_postfix({"valid_loss": valid_loss / len(valid_loader)})
 
         # Average validation loss
         avg_valid_loss = valid_loss / len(valid_loader)
         valid_losses.append(avg_valid_loss)
 
         # Save the best model checkpoint
-        best_valid_loss = save_checkpoint(
-            model, avg_valid_loss, best_valid_loss, epoch, optimizer, output_dir
-        )
+        best_valid_loss = save_checkpoint(model, avg_valid_loss, best_valid_loss, epoch, optimizer, output_dir)
 
     print("Training completed.")
 
@@ -569,6 +558,7 @@ def train(
     np.save(output_dir + "/valid_losses.npy", valid_losses)
 
     return train_losses, valid_losses
+
 
 # %% [markdown]
 # Creating DataLoader for wc training and validation data
@@ -597,17 +587,13 @@ def compare_tf_data_with_current_data(torch_data, tf_data, str=""):
     print(str, ": ", np.array_equal(torch_data, tf_data))
 
 
-compare_tf_data_with_current_data(
-    train_wc, np.load("../output/data_tf/train_wc.npy"), "train_wc"
-)
+compare_tf_data_with_current_data(train_wc, np.load("../output/data_tf/train_wc.npy"), "train_wc")
 compare_tf_data_with_current_data(
     train_targets_wc_norm,
     np.load("../output/data_tf/train_targets_wc_norm.npy"),
     "train_targets_wc_norm",
 )
-compare_tf_data_with_current_data(
-    valid_wc, np.load("../output/data_tf/valid_wc.npy"), "valid_wc"
-)
+compare_tf_data_with_current_data(valid_wc, np.load("../output/data_tf/valid_wc.npy"), "valid_wc")
 compare_tf_data_with_current_data(
     valid_targets_wc_norm,
     np.load("../output/data_tf/valid_targets_wc_norm.npy"),
@@ -710,9 +696,7 @@ if do_the_mcdropout_wc:
     print("Running ...")
 
     prediction_valid_wc = MC_dropout_WC(model, valid_loader, nb_dropout_wc, device)
-    spectre_valid_wc_all = unstandardizing(
-        prediction_valid_wc, min_train_valid_wc, max_train_valid_wc
-    )
+    spectre_valid_wc_all = unstandardizing(prediction_valid_wc, min_train_valid_wc, max_train_valid_wc)
 
     spectre_valid_wc = spectre_valid_wc_all.mean(axis=0)
     spectre_valid_std_wc = spectre_valid_wc_all.std(axis=0)
@@ -726,9 +710,7 @@ if do_the_mcdropout_wc:
 
 # %%
 residuals = spectre_valid_wc - valid_targets_wc
-fig, (ax1, ax2) = plt.subplots(
-    2, 1, figsize=(10, 6), sharex=True, gridspec_kw={"height_ratios": [3, 1]}
-)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
 
 ax1.errorbar(
     x=np.arange(len(spectre_valid_wc)),
@@ -794,14 +776,13 @@ np.save(f"{output_dir}/std_valid_wc.npy", spectre_valid_std_wc)
 #
 # Centers each target by subtracting its mean value, isolating variations around the mean.
 
+
 # %%
 def suppress_mean(targets, mean):
     """
     Suppress the mean of the targets along the columns.
     """
-    res = targets - np.repeat(
-        mean.reshape((mean.shape[0], 1)), repeats=targets.shape[1], axis=1
-    )
+    res = targets - np.repeat(mean.reshape((mean.shape[0], 1)), repeats=targets.shape[1], axis=1)
     return res
 
 
@@ -825,6 +806,7 @@ print("valid_targets_shift.shape", valid_targets_shift.shape)
 # %% [markdown]
 # We normalize the targets so that they range between -1 and 1, centered on zero
 
+
 # %%
 ##### normalization of the targets ###
 def targets_normalization(data1, data2):
@@ -841,9 +823,7 @@ def targets_normalization(data1, data2):
     return data1, data2, data_abs_max
 
 
-train_targets_norm, valid_targets_norm, targets_abs_max = targets_normalization(
-    train_targets_shift, valid_targets_shift
-)
+train_targets_norm, valid_targets_norm, targets_abs_max = targets_normalization(train_targets_shift, valid_targets_shift)
 
 print("train_targets_norm.shape", train_targets_norm.shape)
 print("valid_targets_norm.shape", valid_targets_norm.shape)
@@ -857,7 +837,7 @@ plt.plot([], [], "g-", alpha=0.5, label="Train targets")
 
 for i in range(60):
     plt.plot(wls, valid_targets_norm[i], "r-", alpha=0.7)
-plt.plot([], [], "r-", alpha=0.5, label="Valid targets (true mean)") # TODO: what is this?
+plt.plot([], [], "r-", alpha=0.5, label="Valid targets (true mean)")  # TODO: what is this?
 
 plt.legend()
 plt.ylabel(f"$(R_p/R_s)^2$")
@@ -872,6 +852,7 @@ print(train_obs.shape)
 
 # %% [markdown]
 # We cut the transit to keep the in-transit. We assume an arbitrary transit duration of 40 instants with a transit occuring between 75 and 115.
+
 
 # %%
 ##### Subtracting the out transit signal #####
@@ -889,6 +870,7 @@ print("valid_obs_in.shape", valid_obs_in.shape)
 
 # %% [markdown]
 # We remove the mean value of the in-transit to get relative data like the targets
+
 
 # %%
 ###### Subtract the mean #####
@@ -918,9 +900,7 @@ def data_normback(data, data_abs_max):
     return data * data_abs_max
 
 
-train_obs_norm, valid_obs_norm, data_abs_max = data_normalization(
-    train_obs_2d_mean, valid_obs_2d_mean
-)
+train_obs_norm, valid_obs_norm, data_abs_max = data_normalization(train_obs_2d_mean, valid_obs_2d_mean)
 
 print("train_obs_norm.shape", train_obs_norm.shape)
 print("valid_obs_norm.shape", valid_obs_norm.shape)
@@ -944,36 +924,21 @@ plt.show()
 # %% [markdown]
 # ## Train 2D CNN
 
+
 # %%
 class CNN2DModel(nn.Module):
     def __init__(self):
         super(CNN2DModel, self).__init__()
 
         # Define the convolutional layers
-        self.conv_2d_1 = nn.Conv2d(
-            in_channels=1, out_channels=32, kernel_size=(3, 1), padding="same"
-        )
-        self.conv_2d_2 = nn.Conv2d(
-            in_channels=32, out_channels=64, kernel_size=(3, 1), padding="same"
-        )
-        self.conv_2d_3 = nn.Conv2d(
-            in_channels=64, out_channels=128, kernel_size=(3, 1), padding="same"
-        )
-        self.conv_2d_4 = nn.Conv2d(
-            in_channels=128, out_channels=256, kernel_size=(3, 1), padding="same"
-        )
-        self.conv_2d_5 = nn.Conv2d(
-            in_channels=256, out_channels=32, kernel_size=(1, 3), padding="same"
-        )
-        self.conv_2d_6 = nn.Conv2d(
-            in_channels=32, out_channels=64, kernel_size=(1, 3), padding="same"
-        )
-        self.conv_2d_7 = nn.Conv2d(
-            in_channels=64, out_channels=128, kernel_size=(1, 3), padding="same"
-        )
-        self.conv_2d_8 = nn.Conv2d(
-            in_channels=128, out_channels=256, kernel_size=(1, 3), padding="same"
-        )
+        self.conv_2d_1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(3, 1), padding="same")
+        self.conv_2d_2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=(3, 1), padding="same")
+        self.conv_2d_3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=(3, 1), padding="same")
+        self.conv_2d_4 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=(3, 1), padding="same")
+        self.conv_2d_5 = nn.Conv2d(in_channels=256, out_channels=32, kernel_size=(1, 3), padding="same")
+        self.conv_2d_6 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=(1, 3), padding="same")
+        self.conv_2d_7 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=(1, 3), padding="same")
+        self.conv_2d_8 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=(1, 3), padding="same")
 
         # Define pooling and batch normalization layers
         self.pool_2d_1 = nn.MaxPool2d(kernel_size=(2, 1))
@@ -1025,6 +990,7 @@ class CNN2DModel(nn.Module):
 
         return x
 
+
 # %%
 # define 2D model hyperparameters
 num_epochs_2D = 200
@@ -1039,17 +1005,13 @@ optimizer_2D = optim.Adam(model_2D.parameters(), lr=0.001)
 best_valid_loss_2D = float("inf")
 
 # compare pytorch data with Tensorflow data
-compare_tf_data_with_current_data(
-    train_obs_norm, np.load("../output/data_tf/train_obs_norm.npy"), "train_obs_norm"
-)
+compare_tf_data_with_current_data(train_obs_norm, np.load("../output/data_tf/train_obs_norm.npy"), "train_obs_norm")
 compare_tf_data_with_current_data(
     train_targets_norm,
     np.load("../output/data_tf/train_targets_norm.npy"),
     "train_targets_norm",
 )
-compare_tf_data_with_current_data(
-    valid_obs_norm, np.load("../output/data_tf/valid_obs_norm.npy"), "valid_obs_norm"
-)
+compare_tf_data_with_current_data(valid_obs_norm, np.load("../output/data_tf/valid_obs_norm.npy"), "valid_obs_norm")
 compare_tf_data_with_current_data(
     valid_targets_norm,
     np.load("../output/data_tf/valid_targets_norm.npy"),
@@ -1107,9 +1069,7 @@ print("training loss 2D: ", max(train_losses_2D), min(train_losses_2D))
 print("validation loss 2D: ", max(valid_losses_2D), min(valid_losses_2D))
 
 # %%
-model_2D, optimizer_2D, num_epochs_2D, best_valid_loss_2D = load_checkpoint(
-    output_dir + "/2D", model_2D, optimizer_2D
-)
+model_2D, optimizer_2D, num_epochs_2D, best_valid_loss_2D = load_checkpoint(output_dir + "/2D", model_2D, optimizer_2D)
 
 # %% [markdown]
 # ## Postprocessing and visualisation
@@ -1147,9 +1107,7 @@ def NN_uncertainty(model, x_test, targets_abs_max, nb_dropout, device):
 
 
 if do_the_mcdropout:
-    spectre_valid_shift, spectre_valid_shift_std = NN_uncertainty(
-        model_2D, valid_loader_2D, targets_abs_max, nb_dropout, device
-    )
+    spectre_valid_shift, spectre_valid_shift_std = NN_uncertainty(model_2D, valid_loader_2D, targets_abs_max, nb_dropout, device)
 
 # %%
 residuals = valid_targets_shift - spectre_valid_shift
@@ -1171,9 +1129,7 @@ plt.show()
 
 # %%
 list_valid_planets = [0, 12, 35, 60, 70]
-wavelength = np.loadtxt(
-    "../dataset/ariel-data-challenge-2024/wavelengths.csv", skiprows=1, delimiter=","
-)
+wavelength = np.loadtxt("../dataset/ariel-data-challenge-2024/wavelengths.csv", skiprows=1, delimiter=",")
 uncertainty = spectre_valid_shift_std
 for i in list_valid_planets:
     plt.figure()
@@ -1196,6 +1152,7 @@ for i in list_valid_planets:
 # %% [markdown]
 # # Combine 1D and 2D CNN output for FINAL SPECTRA
 
+
 # %%
 ######## ADD THE FLUCTUATIONS TO THE MEAN ########
 def add_the_mean(shift, mean):
@@ -1204,9 +1161,7 @@ def add_the_mean(shift, mean):
 
 predictions_valid = add_the_mean(spectre_valid_shift, spectre_valid_wc)
 
-predictions_std_valid = np.sqrt(
-    spectre_valid_std_wc[:, np.newaxis] ** 2 + spectre_valid_shift_std**2
-)
+predictions_std_valid = np.sqrt(spectre_valid_std_wc[:, np.newaxis] ** 2 + spectre_valid_shift_std**2)
 
 # %%
 uncertainty = predictions_std_valid
@@ -1266,12 +1221,8 @@ uncertainty = spectre_valid_std_concatenated
 fig, axs = plt.subplots(2, 1, figsize=(9, 8), gridspec_kw={"height_ratios": [3, 1]})
 
 
-axs[0].plot(
-    wls_concatenated, predictions_concatenated_plot, "-", color="k", label="Prediction"
-)
-axs[0].plot(
-    wls_concatenated, targets_concatenated_plot, "-", color="tomato", label="Target"
-)
+axs[0].plot(wls_concatenated, predictions_concatenated_plot, "-", color="k", label="Prediction")
+axs[0].plot(wls_concatenated, targets_concatenated_plot, "-", color="tomato", label="Target")
 axs[0].fill_between(
     np.arange(len(wls_concatenated)),
     predictions_concatenated_plot - uncertainty,
