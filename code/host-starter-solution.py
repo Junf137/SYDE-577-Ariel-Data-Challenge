@@ -1,46 +1,9 @@
-# %% [markdown]
-# # ADC 2024 starter notebook
-
-# %% [markdown]
-# This baseline notebook is designed to offer a starting point for the competiters. Please note that the approach we've taken is not *THE* solution — it's simply ONE possible approach. Our aim is to assist participants in exploring different ways to preprocess and model the data. Please feel free to fork the notebook and save the model/data for your own exploration.
-#
-#
-
-# %% [markdown]
-# This notebook was prepared by Virginie Batista and Angèle Syty from the Institut d'Astrophysique de Paris, and Orphée Faucoz from Centre National d’Etudes Spatiales (CNES), with support from Gordon Yip and Tara Tahseen from University College London.
-
-# %% [markdown]
-# # READ THIS BEFORE YOU PROCEED
-# This training procedure uses the light dataset produced from this [notebook (Version 5)](https://www.kaggle.com/code/gordonyip/update-calibrating-and-binning-astronomical-data). We applied all the calibration steps EXCEPT Linearity Correction with Chunksize = 1. The binned dataset is available to download [here](https://www.kaggle.com/datasets/gordonyip/binned-dataset-v3/data). *If you want to carry out all the correction, you will have to do so yourself.*
-#
-#
-# **This notebook will only provide the model checkpoints, you are welcomed to use these checkpoints with your own script and submit to the leaderboard.**
-
-# %% [markdown]
-# ## Task overview
-
-# %% [markdown]
-# The challenge's primary objective is to process these exposures to produce a single, clean spectrum for each exoplanet, summarizing the rp/rs values across all wavelengths.
-#
-# The exposure are subject to noises and the images or spectrum are not perfect. The Jitter noise has a complex signature that the ML model should recognize to produce a better spectra.
-#
-# Different techniques are possible and are up to the participant imagination to produce a novel (and hopefully better) solution to this task.
-#
-# Here outline our baseline approach :
-#
-# We first fit  a 1D CNN to fit the mean value of the transmission spectra, taking as input the transit white curve (total flux of each image taken as a function of time).
-#
-# For the second part of the baseline, to retrieve the atmopsheric features, we make the data lighter by summing up the fluxes along the y-axis, for each wavelength, resulting in 2D images of dimension (N_times, N_wavelengths). We also cut the signal to remove the out of transit in order to enhance transit depth variations between wavelengths. For the same reason, we substract the mean flux, corresponding to the average transit depth, to keep only wavelength variations around this mean. We use a 2D CNN to fit the atmospheric features.
-#
-
-# %%
+# %% Import libraries
 import os
 import random
 import numpy as np
-from tqdm import tqdm
 
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 
 import torch
 import torch.nn as nn
@@ -51,28 +14,9 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from torchinfo import summary
 
-# %% [markdown]
-# ### Why Use $(R_p/R_s)^2$?
-# The label $(R_p/R_s)^2$ on the y-axis represents the **ratio of the planetary radius $R_p$ to the stellar radius $R_s$ squared**. This quantity is directly related to the **depth of the transit** in a light curve, which is essentially how much the observed stellar flux decreases as the planet transits (or passes in front of) its host star. In other words, $(R_p/R_s)^2$ corresponds to the fraction of the star's light that the planet blocks.
-#
-# In this dataset:
-# - Each wavelength's data reflects **how the stellar flux changes at that wavelength during the transit**. This spectral data indicates which wavelengths experience different transit depths, influenced by the planet's atmosphere absorbing light at certain wavelengths more than others.
-# - The **observations (input data)** capture how flux varies across wavelengths, while the **targets (labels)** aim to model this variability.
-#
-#
-# In other words, the target should be to predict the variations in the flux ratios (caused by the planet's atmosphere).
+from cnn_training import CNNModel, CNN2DModel, train, load_checkpoint
 
-# %%
-img = mpimg.imread("../dataset/baseline-img/2nd_baseline.png")
-plt.figure(figsize=(10, 15))
-plt.imshow(img)
-plt.axis("off")
-plt.show()
-
-# %% [markdown]
-# # Setup Paths and Read Data
-
-# %%
+# %% Setup Paths and Read Data
 # path to the folder containing the data
 data_folder = "../dataset/binned-data/"
 
@@ -106,14 +50,9 @@ if not os.path.exists(output_dir):
 else:
     print(f"Directory {output_dir} already exists.")
 
-# %% [markdown]
-# # 1D-CNN for mean transit depth
-
-# %% [markdown]
-# ## Preprocessing for 1D CNN
-
-# %%
+# Preprocessing for 1D CNN
 train_solution = np.loadtxt(f"{auxiliary_folder}/train_labels.csv", delimiter=",", skiprows=1)
+# train_solution.shape: (673, 284)
 
 # targets:
 # exclude the first column from the train_solution, because that column represents the baseline or overall flux
@@ -121,18 +60,8 @@ train_solution = np.loadtxt(f"{auxiliary_folder}/train_labels.csv", delimiter=",
 #
 # The remaining length of 283 matches the length of one training sample label.
 targets = train_solution[:, 1:]
-# train_solution.shape: (673, 284)
 # targets.shape: (673, 283)
 
-for i in range(50):
-    plt.plot(train_solution[i, :])
-
-plt.xlabel("Wavelength")
-plt.ylabel("Flux")
-plt.title("Train labels")
-plt.show()
-
-# %%
 # targets_mean:
 # The mean of the values in each wavelengths of `targets`, excluding the first column (FGS1)
 # Used for the 1D-CNN to extract the mean value, only AIRS wavelengths as the FGS point is not used in the white curve
@@ -141,20 +70,6 @@ targets_mean = targets[:, 1:].mean(axis=1)
 
 N = targets.shape[0]
 
-# plot targets
-for i in range(50):
-    plt.plot(targets[i, :])
-
-plt.xlabel("Wavelength")
-plt.ylabel("Flux")
-plt.title("Train labels")
-plt.show()
-
-# %% [markdown]
-# We create the dataset by adding the FGS frame, crushed in one column, at the end of the AIRS data cube.
-# The images are normalized using the star spectrum extracted from the images themselves.
-
-# %%
 signal_AIRS_diff_transposed_binned, signal_FGS_diff_transposed_binned = (
     data_train,
     data_train_FGS,
@@ -168,69 +83,9 @@ FGS_column = signal_FGS_diff_transposed_binned.sum(axis=2)
 dataset = np.concatenate([signal_AIRS_diff_transposed_binned, FGS_column[:, :, np.newaxis, :]], axis=2)
 # dataset.shape: (673, 187, 283, 32)
 
-# plot
-fig = plt.figure(figsize=(10, 10))
-fig.suptitle("Dataset visualization")
-
-ax1 = plt.subplot(2, 2, 1)
-ax1.imshow(signal_AIRS_diff_transposed_binned[0, 0, :, :].T)
-ax1.set_title("signal_AIRS_diff_transposed_binned.T")
-
-ax2 = plt.subplot(2, 2, 2)
-ax2.imshow(signal_FGS_diff_transposed_binned[0, 0, :, :].T)
-ax2.set_title("signal_FGS_diff_transposed_binned.T")
-
-# TODO: FGS_column has higher magnitude values
-ax3 = plt.subplot(2, 2, 3)
-ax3.plot(FGS_column[0, 0, :])
-ax3.set_title("FGS_column")
-
-ax4 = plt.subplot(2, 2, 4)
-ax4.imshow(dataset[0, 0, :, :].T)
-ax4.set_title("dataset.T")
-
-# set figure size
-plt.show()
-
-# %% [markdown]
-# we sum up the pixels on the y-axis to transform the data into 2D images
-
-# %%
 # squashing the the pixels dimension
 dataset = dataset.sum(axis=3)
 # dataset.shape: (673, 187, 283)
-
-fig = plt.figure(figsize=(15, 10))
-fig.suptitle("Dataset visualization")
-
-ax1 = plt.subplot(2, 1, 1)
-ax1.plot(dataset[0, 0, :])
-ax1.set_title("dataset[0, 0, :]")
-ax1.set_xlabel("Wavelength index")
-ax1.set_ylabel("Signal intensity")
-
-ax2 = plt.subplot(2, 1, 2)
-ax2.plot(dataset[0, 0, :-1])
-ax2.set_title("dataset[0, 0, :-1]")
-ax2.set_xlabel("Wavelength index")
-ax2.set_ylabel("Signal intensity")
-
-plt.show()
-
-# %% [markdown]
-# We divide the images by the star flux assuming the first and last 50 instants belong to the out of transit.
-
-
-# %%
-# TODO: this function is not used
-def create_dataset_norm(dataset1, dataset2):
-    dataset_norm1 = np.zeros(dataset1.shape)
-    dataset_norm2 = np.zeros(dataset1.shape)
-    dataset_min = dataset1.min()
-    dataset_max = dataset1.max()
-    dataset_norm1 = (dataset1 - dataset_min) / (dataset_max - dataset_min)
-    dataset_norm2 = (dataset2 - dataset_min) / (dataset_max - dataset_min)
-    return dataset_norm1, dataset_norm2
 
 
 def norm_star_spectrum(signal):
@@ -247,16 +102,8 @@ dataset_norm = norm_star_spectrum(dataset)
 dataset_norm = np.transpose(dataset_norm, (0, 2, 1))
 # dataset_norm.shape: (673, 283, 187)
 
-# %% [markdown]
-# ## Split the targets and observations between valid and train
-#
-# We start by computing a "white curve", that is actually the sum of the signal over the all image, as a function of time. We split the data and normalize the train/valid/test data.
 
-
-# %%
 def split(data, N):
-    # TODO: set the seed
-    random.seed(SEED)
     list_planets = random.sample(range(0, data.shape[0]), N)
     list_index_1 = np.zeros(data.shape[0], dtype=bool)
     for planet in list_planets:
@@ -271,11 +118,7 @@ N_train = 8 * N // 10
 
 # Validation and train data split
 train_obs, valid_obs, list_index_train = split(dataset_norm, N_train)
-print("train_obs.shape", train_obs.shape)
-print("valid_obs.shape", valid_obs.shape)
-print("list_index_train.shape", list_index_train.shape)
 
-# %%
 # signal_AIRS_diff_transposed_binned.shape: (673, 187, 282, 32)
 signal_AIRS_diff_transposed_binned_sum3 = signal_AIRS_diff_transposed_binned.sum(axis=3)
 
@@ -323,247 +166,7 @@ train_targets_wc_norm, valid_targets_wc_norm, min_train_valid_wc, max_train_vali
     train_targets_wc, valid_targets_wc
 )
 
-print("train_wc.shape", train_wc.shape)
-print("valid_wc.shape", valid_wc.shape)
-print("train_targets_wc_norm.shape", train_targets_wc_norm.shape)
-print("valid_targets_wc_norm.shape", valid_targets_wc_norm.shape)
-
-# plot train_wc
-plt.figure()
-for i in range(200):
-    plt.plot(train_wc[-i], "-", alpha=0.5)
-plt.title("Light-curves from the train set")
-plt.xlabel("Time")
-plt.ylabel("Normalized flux")
-plt.show()
-
-# %% [markdown]
-# ## Train 1D CNN
-#
-# The model to estimate the mean of the target spectrum using the white light-curve is a 1D-CNN with Dropout layers to make a MC Dropout prediction.
-#
-# This 1D CNN model is designed to predict the **mean flux** values across all 282 wavelengths, as represented by targets_mean for each observation, using the white curve as input data.
-#
-# ### Input: White Curve (673, 187)
-#
-# The white curve provides a normalized temporal profile of the flux signal for each observation (673 observations in total), aggregated over spatial dimensions and wavelengths.
-#
-# This temporal profile across 187 time steps serves as the input feature for each observation, focusing the model on how the flux changes over time while minimizing spectral details.
-#
-#
-# ### Output: Targets Mean (673,)
-#
-# The model aims to predict the mean flux across specific wavelengths (283 in total) for each observation, as captured in targets_mean.
-#
-# This mean flux is computed from the targets matrix, which excludes the first column in the train_solution data. The first column likely represents a baseline flux measurement, while the remaining columns represent wavelength-specific flux measurements.
-#
-# The target is thus an overall "mean" value that characterizes each observation’s flux level across these wavelengths.
-#
-#
-# ### Purpose of the 1D CNN:
-#
-# The 1D CNN is structured to capture patterns in the temporal signal of the white curve that correlate with the overall flux level across wavelengths.
-#
-# By predicting the mean flux, the model may indirectly capture factors such as instrument calibration effects, environmental factors, or baseline shifts that impact the overall light intensity at a given observation time.
-#
-# This prediction provides an efficient summary statistic, allowing scientists to quickly assess the average flux across wavelengths for each observation without needing to reconstruct the full wavelength-dependent signal.
-#
-#
-# ### Why Mean Flux Prediction is Useful
-# Predicting the mean flux is beneficial because it:
-#
-# - Reduces dimensionality from detailed spectral features to a single summary metric.
-# - Provides a normalized measure of light intensity across time for further analyses or comparisons.
-# - Can be used as a preliminary step in a more complex analysis pipeline, where the mean flux serves as an input feature or control variable.
-
-
-# %%
-class CNNModel(nn.Module):
-    def __init__(self):
-        super(CNNModel, self).__init__()
-
-        # Define the convolutional layers
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=32, kernel_size=3)
-        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=3)
-        self.conv3 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3)
-        self.conv4 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=3)
-
-        # Define pooling and batch normalization layers
-        self.pool = nn.MaxPool1d(kernel_size=2)
-        self.bn1 = nn.BatchNorm1d(num_features=32)
-
-        # Define fully connected layers
-        self.fc1 = nn.Linear(in_features=256 * 9, out_features=500)
-        self.fc2 = nn.Linear(in_features=500, out_features=100)
-        self.fc3 = nn.Linear(in_features=100, out_features=1)
-
-        # Flatten layer
-        self.flatten = nn.Flatten()
-
-        # Dropout
-        self.dropout1 = nn.Dropout(0.2)
-        self.dropout2 = nn.Dropout(0.1)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = self.pool(x)
-        x = self.bn1(x)
-
-        x = F.relu(self.conv2(x))
-        x = self.pool(x)
-
-        x = F.relu(self.conv3(x))
-        x = self.pool(x)
-
-        x = F.relu(self.conv4(x))
-        x = self.pool(x)
-
-        x = self.flatten(x)
-
-        x = F.relu(self.fc1(x))
-        x = self.dropout1(x)
-
-        x = F.relu(self.fc2(x))
-        x = self.dropout2(x)
-
-        x = self.fc3(x)
-        return x
-
-
-# Checkpoint saving function
-def save_checkpoint(model, valid_loss, best_valid_loss, epoch, optimizer, output_dir):
-
-    if valid_loss < best_valid_loss:
-
-        print(f"Validation loss decreased from {best_valid_loss:.6f} to {valid_loss:.6f}.")
-
-        best_valid_loss = valid_loss
-        torch.save(
-            {
-                "epoch": epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": valid_loss,
-            },
-            output_dir + "/model_1d_cnn.pth",
-        )
-
-    return best_valid_loss
-
-
-# Checkpoint loading function
-def load_checkpoint(model_dir, model, optimizer):
-    model_path = model_dir + "/model_1d_cnn.pth"
-
-    if not os.path.exists(model_path):
-        print("Checkpoint file does not exist. Training from scratch.")
-        return model, optimizer, 0, float("inf")
-
-    # Load the saved checkpoint
-    checkpoint = torch.load(model_path, weights_only=False)
-
-    # Restore model state
-    model.load_state_dict(checkpoint["model_state_dict"])
-
-    # Restore optimizer state
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-
-    # Retrieve the epoch and loss information
-    epoch = checkpoint["epoch"]
-    valid_loss = checkpoint["loss"]
-
-    print(f"Checkpoint loaded: Epoch {epoch}, Validation Loss {valid_loss:.4f}")
-
-    return model, optimizer, epoch, valid_loss
-
-
-# Training Loop
-def train(
-    model,
-    train_loader,
-    valid_loader,
-    num_epochs,
-    criterion,
-    optimizer,
-    scheduler,
-    output_dir,
-    device,
-    best_valid_loss=float("inf"),
-):
-    print("Training started.")
-
-    train_losses = []
-    valid_losses = []
-
-    for epoch in range(num_epochs):
-        # 1. Training phase
-        model.train()
-        running_loss = 0.0
-
-        train_progress = tqdm(train_loader)
-        for x_train, y_train in train_progress:
-
-            x_train, y_train = x_train.to(device), y_train.to(device)
-
-            optimizer.zero_grad()
-
-            # Forward pass
-            output = model(x_train)
-            loss = criterion(output, y_train)
-
-            # Backward pass
-            loss.backward()
-            optimizer.step()
-
-            running_loss += loss.item()
-
-            train_progress.set_description(f"Epoch {epoch+1}/{num_epochs}")
-            train_progress.set_postfix({"loss": loss.item()})
-
-        # Learning rate decay
-        if scheduler is not None:
-            scheduler.step()
-
-        # Average training loss for the epoch
-        avg_train_loss = running_loss / len(train_loader)
-        train_losses.append(avg_train_loss)
-
-        # 2. Validation phase
-        model.eval()
-        valid_loss = 0.0
-
-        with torch.no_grad():
-            valid_progress = tqdm(valid_loader)
-            for x_valid, y_valid in valid_progress:
-
-                x_valid, y_valid = x_valid.to(device), y_valid.to(device)
-
-                valid_output = model(x_valid)
-                valid_loss += criterion(valid_output, y_valid).item()
-
-                valid_progress.set_description(f"Validation Epoch {epoch+1}/{num_epochs}")
-                valid_progress.set_postfix({"valid_loss": valid_loss / len(valid_loader)})
-
-        # Average validation loss
-        avg_valid_loss = valid_loss / len(valid_loader)
-        valid_losses.append(avg_valid_loss)
-
-        # Save the best model checkpoint
-        best_valid_loss = save_checkpoint(model, avg_valid_loss, best_valid_loss, epoch, optimizer, output_dir)
-
-    print("Training completed.")
-
-    # Save all train_losses and valid_losses of this training process
-    np.save(output_dir + "/train_losses.npy", train_losses)
-    np.save(output_dir + "/valid_losses.npy", valid_losses)
-
-    return train_losses, valid_losses
-
-
-# %% [markdown]
 # Creating DataLoader for wc training and validation data
-
-# %%
 # define model hyperparameters
 num_epochs = 1200
 batch_size = 16
@@ -581,25 +184,6 @@ loss_fn = torch.nn.MSELoss()
 
 best_valid_loss = float("inf")
 
-
-# compare input data with Tensorflow data
-def compare_tf_data_with_current_data(torch_data, tf_data, str=""):
-    print(str, ": ", np.array_equal(torch_data, tf_data))
-
-
-compare_tf_data_with_current_data(train_wc, np.load("../output/data_tf/train_wc.npy"), "train_wc")
-compare_tf_data_with_current_data(
-    train_targets_wc_norm,
-    np.load("../output/data_tf/train_targets_wc_norm.npy"),
-    "train_targets_wc_norm",
-)
-compare_tf_data_with_current_data(valid_wc, np.load("../output/data_tf/valid_wc.npy"), "valid_wc")
-compare_tf_data_with_current_data(
-    valid_targets_wc_norm,
-    np.load("../output/data_tf/valid_targets_wc_norm.npy"),
-    "valid_targets_wc_norm",
-)
-
 # Create TensorDataset for training and validation data
 train_dataset = TensorDataset(
     torch.tensor(train_wc[:, np.newaxis, :], dtype=torch.float32),
@@ -613,11 +197,6 @@ valid_dataset = TensorDataset(
 # Create DataLoader for training and validation data
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
-
-print("train input: ", train_loader.dataset.tensors[0].shape)
-print("train output: ", train_loader.dataset.tensors[1].shape)
-print("valid input: ", valid_loader.dataset.tensors[0].shape)
-print("valid output: ", valid_loader.dataset.tensors[1].shape)
 
 summary(model, input_size=(train_loader.dataset.tensors[0].shape))
 
@@ -647,16 +226,10 @@ plt.grid(True)
 plt.savefig(output_dir + "/training_validation_loss.png")
 plt.show()
 
-# %%
+# %% Load the best model
 model, optimizer, epoch, best_valid_loss = load_checkpoint(output_dir, model, optimizer)
 
-# %% [markdown]
-# ## 1D CNN Inference
-
-# %% [markdown]
-# Then, we perform the MC Dropout to obtain the mean prediction and the uncertainty associated. We choose to compute 1000 instances.
-
-# %%
+# %% 1D CNN Inference
 nb_dropout_wc = 1000
 
 
@@ -708,51 +281,8 @@ if do_the_mcdropout_wc:
     print("spectre_valid_wc.shape", spectre_valid_wc.shape)
     print("spectre_valid_std_wc.shape", spectre_valid_std_wc.shape)
 
-# %%
 residuals = spectre_valid_wc - valid_targets_wc
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
 
-ax1.errorbar(
-    x=np.arange(len(spectre_valid_wc)),
-    y=spectre_valid_wc,
-    yerr=spectre_valid_std_wc,
-    fmt=".",
-    color="k",
-    ecolor="gray",
-    label="Prediction",
-    alpha=0.8,
-)
-ax1.fill_between(
-    np.arange(len(spectre_valid_wc)),
-    spectre_valid_wc - spectre_valid_std_wc,
-    spectre_valid_wc + spectre_valid_std_wc,
-    color="grey",
-    alpha=0.5,
-)
-ax1.vlines(
-    np.arange(len(spectre_valid_wc)),
-    ymin=0,
-    ymax=spectre_valid_wc,
-    colors="r",
-    linestyle="dashed",
-    alpha=0.1,
-)
-ax1.plot(valid_targets_wc, "r.", label="Target", alpha=0.8)
-ax1.set_xlabel("Concatenated targets")
-ax1.set_ylabel("$(R_p/R_s)^2$")
-ax1.set_title("Prediction vs target, mean value of the spectrum, on validation dataset")
-ax1.legend()
-
-ax2.plot(residuals, "b.", label="Residuals", alpha=0.8)
-ax2.set_xlabel("Concatenated targets")
-ax2.set_ylabel("Residuals")
-ax2.axhline(0, color="black", linestyle="--", linewidth=1)
-ax2.legend()
-
-plt.tight_layout()
-plt.show()
-
-# %%
 residuals = valid_targets_wc - spectre_valid_wc
 print("MSE : ", np.sqrt((residuals**2).mean()) * 1e6, "ppm")
 
@@ -760,10 +290,10 @@ print("MSE : ", np.sqrt((residuals**2).mean()) * 1e6, "ppm")
 print(np.mean(100 * np.abs(residuals / valid_targets_wc)))
 # TODO: MSE larger than baseline model
 
-# %%
-np.save(f"{output_dir}/pred_valid_wc.npy", spectre_valid_wc)
-np.save(f"{output_dir}/targ_valid_wc.npy", valid_targets_wc)
-np.save(f"{output_dir}/std_valid_wc.npy", spectre_valid_std_wc)
+# np.save(f"{output_dir}/pred_valid_wc.npy", spectre_valid_wc)
+# np.save(f"{output_dir}/targ_valid_wc.npy", valid_targets_wc)
+# np.save(f"{output_dir}/std_valid_wc.npy", spectre_valid_std_wc)
+
 
 # %% [markdown]
 # # 2D CNN for atmospheric features
