@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torchvision import transforms
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -18,6 +19,7 @@ from cnn_training import CNNModel, CNN2DModel
 
 from training import train, load_checkpoint
 
+from attention_encoder import EncoderDecoderWithAttention, Custom2DDataset
 
 # %% Setup Paths and Read Data
 # path to the folder containing the data
@@ -342,7 +344,7 @@ train_obs_norm, valid_obs_norm, train_abs_max = normalize_2(train_obs_2d_mean, v
 num_epochs_2D = 200
 batch_size_2D = 32
 
-model_2D = CNN2DModel().to(device)
+model_2D = EncoderDecoderWithAttention(output_dim=283).to(device)
 
 criterion_2D = nn.MSELoss()
 
@@ -350,20 +352,32 @@ optimizer_2D = optim.Adam(model_2D.parameters(), lr=0.001)
 
 best_valid_loss_2D = float("inf")
 
+# preprocess = ResNet50_Weights.IMAGENET1K_V2.transforms()
+preprocess_2D = transforms.Compose(
+    [
+        transforms.Resize(232),
+        transforms.CenterCrop(224),
+        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.Normalize(mean=[0.485], std=[0.229]),
+    ]
+)
+
 # Dataset and Dataloader
-train_dataset_2D = TensorDataset(
+train_dataset_2D = Custom2DDataset(
     torch.tensor(train_obs_norm[:, np.newaxis, :, :], dtype=torch.float32),
     torch.tensor(train_targets_norm, dtype=torch.float32),
+    transform=preprocess_2D,
 )
-valid_dataset_2D = TensorDataset(
+valid_dataset_2D = Custom2DDataset(
     torch.tensor(valid_obs_norm[:, np.newaxis, :, :], dtype=torch.float32),
     torch.tensor(valid_targets_norm, dtype=torch.float32),
+    transform=preprocess_2D,
 )
 
 train_loader_2D = DataLoader(train_dataset_2D, batch_size=batch_size_2D, shuffle=True)
 valid_loader_2D = DataLoader(valid_dataset_2D, batch_size=batch_size_2D, shuffle=False)
 
-summary(model_2D, input_size=(train_loader_2D.dataset.tensors[0].shape))
+summary(model_2D, input_size=(train_loader_2D.dataset.data.shape))
 
 # %% Train the 2D CNN model
 TrainOrLoad_2D = "Train"
