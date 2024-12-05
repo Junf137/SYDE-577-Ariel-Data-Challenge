@@ -158,33 +158,37 @@ valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 summary(model, input_size=(train_loader.dataset.tensors[0].shape))
 
 # %% Train the 1D CNN model
-train_losses, valid_losses = train(
-    model=model,
-    train_loader=train_loader,
-    valid_loader=valid_loader,
-    num_epochs=num_epochs,
-    criterion=loss_fn,
-    optimizer=optimizer,
-    scheduler=scheduler,
-    output_dir=output_dir,
-    device=device,
-    best_valid_loss=best_valid_loss,
-)
+LoadOrTrain_1D = "Train"
+# LoadOrTrain_1D = "Load"
 
-# Plot the training and validation loss
-plt.figure(figsize=(10, 6))
-plt.plot(range(1, num_epochs + 1), train_losses, label="Training Loss")
-plt.plot(range(1, num_epochs + 1), valid_losses, label="Validation Loss")
-plt.xlabel("Epochs")
-plt.ylabel("Loss")
-plt.title("Training and Validation Loss")
-plt.legend()
-plt.grid(True)
-plt.savefig(output_dir + "/training_validation_loss.png")
-plt.show()
+if LoadOrTrain_1D == "Train":
+    train_losses, valid_losses = train(
+        model=model,
+        train_loader=train_loader,
+        valid_loader=valid_loader,
+        num_epochs=num_epochs,
+        criterion=loss_fn,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        output_dir=output_dir,
+        device=device,
+        best_valid_loss=best_valid_loss,
+    )
 
-# %% Load the best 1D CNN model
-model, optimizer, epoch, best_valid_loss = load_checkpoint(output_dir, model, optimizer)
+    # Plot the training and validation loss
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, num_epochs + 1), train_losses, label="Training Loss")
+    plt.plot(range(1, num_epochs + 1), valid_losses, label="Validation Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(output_dir + "/training_validation_loss.png")
+    plt.show()
+
+elif LoadOrTrain_1D == "Load":
+    model, optimizer, epoch, best_valid_loss = load_checkpoint(output_dir, model, optimizer)
 
 # %% 1D CNN Inference
 nb_dropout_wc = 1000
@@ -359,37 +363,38 @@ valid_loader_2D = DataLoader(valid_dataset_2D, batch_size=batch_size_2D, shuffle
 summary(model_2D, input_size=(train_loader_2D.dataset.tensors[0].shape))
 
 # %% Train the 2D CNN model
-train_losses_2D, valid_losses_2D = train(
-    model=model_2D,
-    train_loader=train_loader_2D,
-    valid_loader=valid_loader_2D,
-    num_epochs=num_epochs_2D,
-    criterion=criterion_2D,
-    optimizer=optimizer_2D,
-    scheduler=None,
-    output_dir=output_dir + "/2D",
-    device=device,
-    best_valid_loss=best_valid_loss_2D,
-)
+TrainOrLoad_2D = "Train"
+# TrainOrLoad_2D = "Load"
 
-# Plot the training and validation loss
-plt.figure(figsize=(10, 6))
-plt.plot(range(1, num_epochs_2D + 1), train_losses_2D, label="Training Loss 2D")
-plt.plot(range(1, num_epochs_2D + 1), valid_losses_2D, label="Validation Loss 2D")
-plt.xlabel("Epochs")
-plt.ylabel("Loss")
-plt.title("Training and Validation Loss (2D)")
-plt.legend()
-plt.grid(True)
+if TrainOrLoad_2D == "Train":
+    train_losses_2D, valid_losses_2D = train(
+        model=model_2D,
+        train_loader=train_loader_2D,
+        valid_loader=valid_loader_2D,
+        num_epochs=num_epochs_2D,
+        criterion=criterion_2D,
+        optimizer=optimizer_2D,
+        scheduler=None,
+        output_dir=output_dir + "/2D",
+        device=device,
+        best_valid_loss=best_valid_loss_2D,
+    )
 
-plt.savefig(output_dir + "/2D" + "/training_validation_loss.png")
-plt.show()
+    # Plot the training and validation loss
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, num_epochs_2D + 1), train_losses_2D, label="Training Loss 2D")
+    plt.plot(range(1, num_epochs_2D + 1), valid_losses_2D, label="Validation Loss 2D")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss (2D)")
+    plt.legend()
+    plt.grid(True)
 
-print("training loss 2D: ", max(train_losses_2D), min(train_losses_2D))
-print("validation loss 2D: ", max(valid_losses_2D), min(valid_losses_2D))
+    plt.savefig(output_dir + "/2D" + "/training_validation_loss.png")
+    plt.show()
 
-# %% Load the best 2D CNN model
-model_2D, optimizer_2D, num_epochs_2D, best_valid_loss_2D = load_checkpoint(output_dir + "/2D", model_2D, optimizer_2D)
+elif TrainOrLoad_2D == "Load":
+    model_2D, optimizer_2D, num_epochs_2D, best_valid_loss_2D = load_checkpoint(output_dir + "/2D", model_2D, optimizer_2D)
 
 # %% 2D CNN Inference
 nb_dropout = 5
