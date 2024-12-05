@@ -14,7 +14,10 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from torchinfo import summary
 
-from cnn_training import CNNModel, CNN2DModel, train, load_checkpoint
+from cnn_training import CNNModel, CNN2DModel
+
+from training import train, load_checkpoint
+
 
 # %% Setup Paths and Read Data
 # path to the folder containing the data
