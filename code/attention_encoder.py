@@ -13,27 +13,14 @@ class Encoder(nn.Module):
         self.adopting_conv = nn.Conv2d(1, 3, kernel_size=(3, 3), padding="same")
 
         # Load pretrained ResNet50 with ImageNet weights
-        resnet = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
-
-        # Load pretrained ResNet18 with ImageNet weights
-        # resnet = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-
-        # Remove the last two layers (avgpool and fc)
-        self.resnet = nn.Sequential(*list(resnet.children())[:-2])
-
-        # Adaptive pooling to get a fixed size output
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.resnet = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
 
         # Fully connected layer to get the desired output size
-        self.fc = nn.Linear(resnet.fc.in_features, 1024)
-
-        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(self.resnet.fc.out_features, 1024)
 
     def forward(self, x):
         x = self.adopting_conv(x)
         x = self.resnet(x)
-        x = self.pool(x)
-        x = self.flatten(x)
         x = self.fc(x)
         return x
 
@@ -177,3 +164,14 @@ class Custom2DDataset(Dataset):
             sample = self.transform(sample)  # Apply transform
 
         return sample, target
+
+
+# main
+if __name__ == "__main__":
+    model = EncoderDecoderWithAttention(output_dim=283)
+
+    x = torch.randn(16, 1, 224, 224)
+
+    outputs = model(x)
+
+    print(outputs.shape)
